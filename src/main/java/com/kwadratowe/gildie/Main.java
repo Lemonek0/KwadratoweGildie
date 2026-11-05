@@ -44,7 +44,6 @@ public final class Main extends JavaPlugin implements CommandExecutor, Listener 
     private final Map<String, String> playerGuilds = new HashMap<>();
     private final Map<String, String> invites = new HashMap<>();
 
-    // Dostępna paleta ładnych kolorów dla gildii
     private final List<ChatColor> availableColors = Arrays.asList(
             ChatColor.RED, ChatColor.BLUE, ChatColor.GREEN, ChatColor.YELLOW,
             ChatColor.GOLD, ChatColor.LIGHT_PURPLE, ChatColor.AQUA, ChatColor.DARK_PURPLE,
@@ -193,7 +192,6 @@ public final class Main extends JavaPlugin implements CommandExecutor, Listener 
                 }
             }
 
-            // Losowanie unikalnego koloru dla gildii
             List<ChatColor> usedColors = new ArrayList<>();
             for (Guild g : guilds.values()) {
                 usedColors.add(g.color);
@@ -350,7 +348,6 @@ public final class Main extends JavaPlugin implements CommandExecutor, Listener 
         if (playerGuilds.containsKey(pLower)) {
             Guild g = guilds.get(playerGuilds.get(pLower));
             if (g != null) {
-                // Wiadomość i tag w unikalnym kolorze danej gildii!
                 event.setFormat(g.color + "[" + g.tag + "] " + ChatColor.AQUA + "%s" + ChatColor.WHITE + ": " + g.color + "%s");
             }
         } else {
@@ -385,7 +382,7 @@ public final class Main extends JavaPlugin implements CommandExecutor, Listener 
     @EventHandler
     public void onBlockPlace(BlockPlaceEvent event) {
         Player p = event.getPlayer();
-        Guild g = getGuildAt(event.getBlock().getLocation());
+        Guild g = getGuildAt(event.getBlock().getLocation()); // Poprawiono z getGridAt na getGuildAt
         if (g != null) {
             String pLower = p.getName().toLowerCase();
             if (!playerGuilds.containsKey(pLower) || !playerGuilds.get(pLower).equals(g.name.toLowerCase())) {
