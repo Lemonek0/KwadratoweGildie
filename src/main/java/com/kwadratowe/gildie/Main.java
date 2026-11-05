@@ -26,24 +26,33 @@ public final class Main extends JavaPlugin implements CommandExecutor, Listener 
         String name;
         String tag;
         String leader;
+        ChatColor color;
         Location center;
         Set<String> members = new HashSet<>();
 
-        public Guild(String name, String tag, String leader, Location center) {
+        public Guild(String name, String tag, String leader, ChatColor color, Location center) {
             this.name = name;
             this.tag = tag;
             this.leader = leader;
+            this.color = color;
             this.center = center;
             this.members.add(leader);
         }
     }
 
-    private final Map<String, Guild> guilds = new HashMap<>(); // Nazwa gildii -> Obiekt Guild
-    private final Map<String, String> playerGuilds = new HashMap<>(); // Gracz -> Nazwa gildii
-    private final Map<String, String> invites = new HashMap<>(); // Zaproszony gracz -> Nazwa gildii
+    private final Map<String, Guild> guilds = new HashMap<>();
+    private final Map<String, String> playerGuilds = new HashMap<>();
+    private final Map<String, String> invites = new HashMap<>();
 
-    private final int PROTECTION_RADIUS = 25; // Promień działki (50x50)
-    private final int DIAMOND_COST = 5;       // Koszt w diamentach
+    // Dostępna paleta ładnych kolorów dla gildii
+    private final List<ChatColor> availableColors = Arrays.asList(
+            ChatColor.RED, ChatColor.BLUE, ChatColor.GREEN, ChatColor.YELLOW,
+            ChatColor.GOLD, ChatColor.LIGHT_PURPLE, ChatColor.AQUA, ChatColor.DARK_PURPLE,
+            ChatColor.DARK_RED, ChatColor.DARK_BLUE, ChatColor.DARK_GREEN, ChatColor.BROWN
+    );
+
+    private final int PROTECTION_RADIUS = 25;
+    private final int DIAMOND_COST = 5;
 
     private File file;
     private FileConfiguration config;
@@ -56,7 +65,7 @@ public final class Main extends JavaPlugin implements CommandExecutor, Listener 
         createFile();
         loadGuilds();
 
-        getLogger().info("KwadratoweGildie v2.0 zostały pomyślnie włączone!");
+        getLogger().info("KwadratoweGildie v3.0 z kolorami zostały włączone!");
     }
 
     @Override
@@ -84,10 +93,17 @@ public final class Main extends JavaPlugin implements CommandExecutor, Listener 
         for (String gName : section.getKeys(false)) {
             String tag = section.getString(gName + ".tag", gName);
             String leader = section.getString(gName + ".leader");
+            String colorName = section.getString(gName + ".color", "GREEN");
+            ChatColor color;
+            try {
+                color = ChatColor.valueOf(colorName);
+            } catch (Exception e) {
+                color = ChatColor.GREEN;
+            }
             Location loc = section.getLocation(gName + ".center");
             List<String> membersList = section.getStringList(gName + ".members");
 
-            Guild guild = new Guild(gName, tag, leader, loc);
+            Guild guild = new Guild(gName, tag, leader, color, loc);
             guild.members.clear();
             guild.members.addAll(membersList);
 
@@ -104,6 +120,7 @@ public final class Main extends JavaPlugin implements CommandExecutor, Listener 
             String path = "guilds." + entry.getValue().name + ".";
             config.set(path + "tag", entry.getValue().tag);
             config.set(path + "leader", entry.getValue().leader);
+            config.set(path + "color", entry.getValue().name());
             config.set(path + "center", entry.getValue().center);
             config.set(path + "members", new ArrayList<>(entry.getValue().members));
         }
@@ -138,14 +155,13 @@ public final class Main extends JavaPlugin implements CommandExecutor, Listener 
 
         String sub = args[0].toLowerCase();
 
-        // /g zaloz <nazwa> <tag>
         if (sub.equals("zaloz")) {
             if (args.length < 3) {
                 player.sendMessage(ChatColor.RED + "Użycie: /g zaloz <nazwa> <tag>");
                 return true;
             }
             if (playerGuilds.containsKey(pLower)) {
-                player.sendMessage(ChatColor.RED + "Posiadasz już gildię! Użyj /g usun, aby ją rozwiązać.");
+                player.sendMessage(ChatColor.RED + "Posiadasz już gildię!");
                 return true;
             }
 
@@ -163,7 +179,7 @@ public final class Main extends JavaPlugin implements CommandExecutor, Listener 
             }
 
             if (!player.getInventory().contains(Material.DIAMOND, DIAMOND_COST)) {
-                player.sendMessage(ChatColor.RED + "Nie masz wystarczającej ilości diamentów! Potrzebujesz " + DIAMOND_COST + " sztuk.");
+                player.sendMessage(ChatColor.RED + "Potrzebujesz " + DIAMOND_COST + " diamentów!");
                 return true;
             }
 
@@ -171,25 +187,37 @@ public final class Main extends JavaPlugin implements CommandExecutor, Listener 
             for (Guild g : guilds.values()) {
                 if (g.center.getWorld().equals(loc.getWorld())) {
                     if (g.center.distance(loc) < (PROTECTION_RADIUS * 2 + 10)) {
-                        player.sendMessage(ChatColor.RED + "Tutaj jest zbyt blisko bazy innej gildii!");
+                        player.sendMessage(ChatColor.RED + "Zbyt blisko bazy innej gildii!");
                         return true;
                     }
                 }
             }
 
+            // Losowanie unikalnego koloru dla gildii
+            List<ChatColor> usedColors = new ArrayList<>();
+            for (Guild g : guilds.values()) {
+                usedColors.add(g.color);
+            }
+            ChatColor guildColor = ChatColor.GREEN;
+            for (ChatColor c : availableColors) {
+                if (!usedColors.contains(c)) {
+                    guildColor = c;
+                    break;
+                }
+            }
+
             player.getInventory().removeItem(new org.bukkit.inventory.ItemStack(Material.DIAMOND, DIAMOND_COST));
 
-            Guild newGuild = new Guild(gName, gTag, pName, loc);
+            Guild newGuild = new Guild(gName, gTag, pName, guildColor, loc);
             guilds.put(gName.toLowerCase(), newGuild);
             playerGuilds.put(pLower, gName.toLowerCase());
             saveGuilds();
 
-            Bukkit.broadcastMessage(ChatColor.GOLD + "[Gildie] " + ChatColor.YELLOW + "Gracz " + pName + " założył gildię " + ChatColor.GREEN + gName + " [" + gTag + "]");
-            player.sendMessage(ChatColor.GREEN + "Gildia została pomyślnie utworzona. Teren 50x50 zabezpieczony.");
+            Bukkit.broadcastMessage(ChatColor.GOLD + "[Gildie] " + guildColor + "Gracz " + pName + " założył gildię " + gName + " [" + gTag + "]!");
+            player.sendMessage(ChatColor.GREEN + "Gildia utworzona pomyślnie!");
             return true;
         }
 
-        // /g usun
         if (sub.equals("usun")) {
             if (!playerGuilds.containsKey(pLower)) {
                 player.sendMessage(ChatColor.RED + "Nie należysz do żadnej gildii!");
@@ -199,7 +227,7 @@ public final class Main extends JavaPlugin implements CommandExecutor, Listener 
             Guild g = guilds.get(gKey);
 
             if (!g.leader.equalsIgnoreCase(pName)) {
-                player.sendMessage(ChatColor.RED + "Tylko założyciel może usunąć gildię!");
+                player.sendMessage(ChatColor.RED + "Tylko lider może usunąć gildię!");
                 return true;
             }
 
@@ -209,21 +237,20 @@ public final class Main extends JavaPlugin implements CommandExecutor, Listener 
             guilds.remove(gKey);
             saveGuilds();
 
-            Bukkit.broadcastMessage(ChatColor.GOLD + "[Gildie] " + ChatColor.YELLOW + "Gildia " + g.name + " została zniszczona.");
+            Bukkit.broadcastMessage(ChatColor.GOLD + "[Gildie] " + ChatColor.YELLOW + "Gildia " + g.name + " została usunięta.");
             return true;
         }
 
-        // /g zapros <gracz>
         if (sub.equals("zapros")) {
             if (!playerGuilds.containsKey(pLower)) {
-                player.sendMessage(ChatColor.RED + "Nie należysz do żadnej gildii!");
+                player.sendMessage(ChatColor.RED + "Nie masz gildii!");
                 return true;
             }
             String gKey = playerGuilds.get(pLower);
             Guild g = guilds.get(gKey);
 
             if (!g.leader.equalsIgnoreCase(pName)) {
-                player.sendMessage(ChatColor.RED + "Tylko lider może zapraszać graczy!");
+                player.sendMessage(ChatColor.RED + "Tylko lider może zapraszać!");
                 return true;
             }
 
@@ -234,20 +261,19 @@ public final class Main extends JavaPlugin implements CommandExecutor, Listener 
 
             Player target = Bukkit.getPlayer(args[1]);
             if (target == null || !target.isOnline()) {
-                player.sendMessage(ChatColor.RED + "Podany gracz nie jest online.");
+                player.sendMessage(ChatColor.RED + "Gracz jest niedostępny.");
                 return true;
             }
 
             invites.put(target.getName().toLowerCase(), g.name);
-            target.sendMessage(ChatColor.GOLD + "[Gildie] " + ChatColor.YELLOW + "Zaproszenie do gildii " + ChatColor.GREEN + g.name + ChatColor.YELLOW + ". Wpisz /g dolacz " + g.name);
+            target.sendMessage(ChatColor.GOLD + "[Gildie] " + ChatColor.YELLOW + "Zaproszenie do gildii " + g.color + g.name);
             player.sendMessage(ChatColor.GREEN + "Wysłano zaproszenie.");
             return true;
         }
 
-        // /g dolacz <nazwa>
         if (sub.equals("dolacz")) {
             if (playerGuilds.containsKey(pLower)) {
-                player.sendMessage(ChatColor.RED + "Już należysz do gildii!");
+                player.sendMessage(ChatColor.RED + "Już masz gildię!");
                 return true;
             }
             if (args.length < 2) {
@@ -259,13 +285,13 @@ public final class Main extends JavaPlugin implements CommandExecutor, Listener 
             String invitedTo = invites.get(pLower);
 
             if (invitedTo == null || !invitedTo.equalsIgnoreCase(targetGuildName)) {
-                player.sendMessage(ChatColor.RED + "Nie masz zaproszenia do tej gildii!");
+                player.sendMessage(ChatColor.RED + "Brak zaproszenia do tej gildii!");
                 return true;
             }
 
             Guild g = guilds.get(targetGuildName);
             if (g == null) {
-                player.sendMessage(ChatColor.RED + "Taka gildia już nie istnieje.");
+                player.sendMessage(ChatColor.RED + "Gildia już nie istnieje.");
                 return true;
             }
 
@@ -273,77 +299,49 @@ public final class Main extends JavaPlugin implements CommandExecutor, Listener 
             playerGuilds.put(pLower, targetGuildName);
             invites.remove(pLower);
             saveGuilds();
-
-            for (String member : g.members) {
-                Player mPlayer = Bukkit.getPlayer(member);
-                if (mPlayer != null && mPlayer.isOnline()) {
-                    mPlayer.sendMessage(ChatColor.YELLOW + "Gracz " + pName + " dołączył do gildii!");
-                }
-            }
             return true;
         }
 
-        // /g wyrzuc <gracz>
         if (sub.equals("wyrzuc")) {
-            if (!playerGuilds.containsKey(pLower)) {
-                player.sendMessage(ChatColor.RED + "Nie należysz do żadnej gildii!");
-                return true;
-            }
+            if (!playerGuilds.containsKey(pLower)) return true;
             String gKey = playerGuilds.get(pLower);
             Guild g = guilds.get(gKey);
 
             if (!g.leader.equalsIgnoreCase(pName)) {
-                player.sendMessage(ChatColor.RED + "Tylko lider może wyrzucać członków!");
+                player.sendMessage(ChatColor.RED + "Tylko lider może wyrzucać!");
                 return true;
             }
 
-            if (args.length < 2) {
-                player.sendMessage(ChatColor.RED + "Użycie: /g wyrzuc <gracz>");
-                return true;
-            }
-
+            if (args.length < 2) return true;
             String targetName = args[1];
-            if (targetName.equalsIgnoreCase(pName)) {
-                player.sendMessage(ChatColor.RED + "Nie możesz wyrzucić samego siebie!");
-                return true;
-            }
 
             if (!g.members.contains(targetName)) {
-                player.sendMessage(ChatColor.RED + "Ten gracz nie jest w Twojej gildii.");
+                player.sendMessage(ChatColor.RED + "Gracz nie jest w Twojej gildii.");
                 return true;
             }
 
             g.members.remove(targetName);
             playerGuilds.remove(targetName.toLowerCase());
             saveGuilds();
-
-            player.sendMessage(ChatColor.GREEN + "Wyrzucono gracza " + targetName + ".");
-            Player tPlayer = Bukkit.getPlayer(targetName);
-            if (tPlayer != null && tPlayer.isOnline()) {
-                tPlayer.sendMessage(ChatColor.RED + "Zostałeś wyrzucony z gildii " + g.name + "!");
-            }
+            player.sendMessage(ChatColor.GREEN + "Wyrzucono gracza.");
             return true;
         }
 
-        // /g info
         if (sub.equals("info")) {
             if (!playerGuilds.containsKey(pLower)) {
-                player.sendMessage(ChatColor.RED + "Nie należysz do żadnej gildii!");
+                player.sendMessage(ChatColor.RED + "Nie masz gildii!");
                 return true;
             }
             Guild g = guilds.get(playerGuilds.get(pLower));
-            player.sendMessage(ChatColor.GOLD + "=== Gildia: " + g.name + " [" + g.tag + "] ===");
+            player.sendMessage(ChatColor.GOLD + "=== Gildia: " + g.color + g.name + " [" + g.tag + "] ===");
             player.sendMessage(ChatColor.YELLOW + "Lider: " + ChatColor.WHITE + g.leader);
-            player.sendMessage(ChatColor.YELLOW + "Członkowie (" + g.members.size() + "): " + ChatColor.WHITE + String.join(", ", g.members));
-            player.sendMessage(ChatColor.YELLOW + "Koordynaty bazy: " + ChatColor.WHITE + g.center.getBlockX() + ", " + g.center.getBlockY() + ", " + g.center.getBlockZ());
+            player.sendMessage(ChatColor.YELLOW + "Członkowie: " + ChatColor.WHITE + String.join(", ", g.members));
             return true;
         }
 
-        player.sendMessage(ChatColor.RED + "Nieznana komenda.");
         return true;
     }
 
-    // --- OBSŁUGA KOLOROWEGO CZATU I TAGÓW ---
     @EventHandler
     public void onPlayerChat(AsyncPlayerChatEvent event) {
         Player player = event.getPlayer();
@@ -352,24 +350,20 @@ public final class Main extends JavaPlugin implements CommandExecutor, Listener 
         if (playerGuilds.containsKey(pLower)) {
             Guild g = guilds.get(playerGuilds.get(pLower));
             if (g != null) {
-                // Format czatu: [TAG] Nick: Wiadomość (wspólny zielony kolor dla członków gildii)
-                event.setFormat(ChatColor.DARK_GREEN + "[" + g.tag + "] " + ChatColor.AQUA + "%s" + ChatColor.WHITE + ": " + ChatColor.GREEN + "%s");
+                // Wiadomość i tag w unikalnym kolorze danej gildii!
+                event.setFormat(g.color + "[" + g.tag + "] " + ChatColor.AQUA + "%s" + ChatColor.WHITE + ": " + g.color + "%s");
             }
         } else {
-            // Format dla graczy bez gildii
             event.setFormat(ChatColor.GRAY + "[Brak] " + ChatColor.AQUA + "%s" + ChatColor.WHITE + ": " + ChatColor.WHITE + "%s");
         }
     }
 
-    // --- OCHRONA TERENU ---
     private Guild getGuildAt(Location loc) {
         for (Guild g : guilds.values()) {
             if (g.center.getWorld().equals(loc.getWorld())) {
                 int dx = Math.abs(loc.getBlockX() - g.center.getBlockX());
                 int dz = Math.abs(loc.getBlockZ() - g.center.getBlockZ());
-                if (dx <= PROTECTION_RADIUS && dz <= PROTECTION_RADIUS) {
-                    return g;
-                }
+                if (dx <= PROTECTION_RADIUS && dz <= PROTECTION_RADIUS) return g;
             }
         }
         return null;
@@ -416,20 +410,5 @@ public final class Main extends JavaPlugin implements CommandExecutor, Listener 
                 }
             }
         }
-        @EventHandler
-    public void onPlayerChat(AsyncPlayerChatEvent event) {
-        Player player = event.getPlayer();
-        String pLower = player.getName().toLowerCase();
-
-        if (playerGuilds.containsKey(pLower)) {
-            Guild g = guilds.get(playerGuilds.get(pLower));
-            if (g != null) {
-                // Wiadomość i tag w unikalnym kolorze danej gildii!
-                event.setFormat(g.color + "[" + g.tag + "] " + ChatColor.AQUA + "%s" + ChatColor.WHITE + ": " + g.color + "%s");
-            }
-        } else {
-            event.setFormat(ChatColor.GRAY + "[Brak] " + ChatColor.AQUA + "%s" + ChatColor.WHITE + ": " + ChatColor.WHITE + "%s");
-        }
-    }
     }
 }
