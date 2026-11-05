@@ -416,5 +416,20 @@ public final class Main extends JavaPlugin implements CommandExecutor, Listener 
                 }
             }
         }
+        @EventHandler
+    public void onPlayerChat(AsyncPlayerChatEvent event) {
+        Player player = event.getPlayer();
+        String pLower = player.getName().toLowerCase();
+
+        if (playerGuilds.containsKey(pLower)) {
+            Guild g = guilds.get(playerGuilds.get(pLower));
+            if (g != null) {
+                // Wiadomość i tag w unikalnym kolorze danej gildii!
+                event.setFormat(g.color + "[" + g.tag + "] " + ChatColor.AQUA + "%s" + ChatColor.WHITE + ": " + g.color + "%s");
+            }
+        } else {
+            event.setFormat(ChatColor.GRAY + "[Brak] " + ChatColor.AQUA + "%s" + ChatColor.WHITE + ": " + ChatColor.WHITE + "%s");
+        }
+    }
     }
 }
